@@ -31,9 +31,19 @@ go run main.go \
   --outdir ./reports
 ```
 
+Or using a cookie instead of an Authorization header:
+```bash
+go run main.go \
+  --spec ./openapi.json \
+  --base-url https://api.example.com \
+  --cookie "session=abcd1234" \
+  --outdir ./reports
+```
+
 ## Arguments
 --spec — Path to OpenAPI spec JSON file
 --base-url — Base URL of the target API
 --token — Valid JWT token for authenticated probes
+--cookie — Session cookie string for authenticated probes
 --outdir — Output directory for reports (default: reports)
 

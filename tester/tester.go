@@ -25,7 +25,7 @@ var bypassHeaders = []map[string]string{
 	{"Authorization": "Bearer faketoken"},
 }
 
-func RunTests(endpoints []parser.Endpoint, token string) Results {
+func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results {
 	results := Results{
 		Unauth:         make([][2]string, 0),
 		Auth:           make([][2]string, 0),
@@ -34,7 +34,13 @@ func RunTests(endpoints []parser.Endpoint, token string) Results {
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	headersAuth := map[string]string{"Authorization": "Bearer " + token}
+
+	var headersAuth map[string]string
+	if token != "" {
+		headersAuth = map[string]string{"Authorization": "Bearer " + token}
+	} else if cookie != "" {
+		headersAuth = map[string]string{"Cookie": cookie}
+	}
 
 	for _, ep := range endpoints {
 		unauthStatus := doRequest(client, ep.Method, ep.URL, nil)
@@ -60,7 +66,6 @@ func RunTests(endpoints []parser.Endpoint, token string) Results {
 
 	return results
 }
-
 func doRequest(client *http.Client, method, url string, headers map[string]string) string {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
