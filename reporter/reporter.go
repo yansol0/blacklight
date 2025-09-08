@@ -17,6 +17,7 @@ func WriteReports(results tester.Results, outdir string) error {
 	unauthPath := filepath.Join(outdir, "unauth_report.txt")
 	authPath := filepath.Join(outdir, "auth_report.txt")
 	bypassPath := filepath.Join(outdir, "bypass_report.txt")
+	endpointsPath := filepath.Join(outdir, "endpoints_report.txt")
 
 	if err := writeList(unauthPath, results.Unauth); err != nil {
 		return err
@@ -26,6 +27,18 @@ func WriteReports(results tester.Results, outdir string) error {
 	}
 	if err := writeList(bypassPath, results.Bypass); err != nil {
 		return err
+	}
+
+	f, err := os.Create(endpointsPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, ep := range results.Endpoints {
+		line := fmt.Sprintf("%s %s\n", ep.Method, ep.URL)
+		if _, err := f.WriteString(line); err != nil {
+			return err
+		}
 	}
 
 	utils.LogSuccess(fmt.Sprintf("Reports written to %s", outdir))

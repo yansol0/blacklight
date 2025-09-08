@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yansol0/blacklight/parser"
+	"github.com/yansol0/blacklight/tui"
 	"github.com/yansol0/blacklight/utils"
 )
 
@@ -16,6 +17,7 @@ type Results struct {
 	Bypass         [][2]string
 	IDORCandidates []string
 	BypassHits     []string
+	Endpoints      []parser.Endpoint
 }
 
 var bypassHeaders = []map[string]string{
@@ -36,6 +38,8 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 		IDORCandidates: make([]string, 0),
 		BypassHits:     make([]string, 0),
 	}
+
+	results.Endpoints = endpoints
 
 	utils.LogInfo("Starting probes against API...")
 	utils.LogInfo("Total endpoints discovered: " + fmt.Sprint(len(endpoints)))
@@ -95,6 +99,68 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 		utils.LogCritical("====================================")
 	} else {
 		utils.LogInfo("No auth bypasses detected")
+	}
+
+	return results
+}
+
+// RunTestsWithProgress performs the same work as RunTests, but emits progress updates for a TUI.
+func RunTestsWithProgress(endpoints []parser.Endpoint, token string, cookie string, updates chan<- tui.ProgressUpdate) Results {
+	results := Results{
+		Unauth:         make([][2]string, 0),
+		Auth:           make([][2]string, 0),
+		Bypass:         make([][2]string, 0),
+		IDORCandidates: make([]string, 0),
+		BypassHits:     make([]string, 0),
+	}
+
+	results.Endpoints = endpoints
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	var headersAuth map[string]string
+	if token != "" {
+		headersAuth = map[string]string{"Authorization": "Bearer " + token}
+	} else if cookie != "" {
+		headersAuth = map[string]string{"Cookie": cookie}
+	}
+
+	total := len(endpoints)
+	for i, ep := range endpoints {
+		if updates != nil {
+			updates <- tui.ProgressUpdate{CurrentIndex: i + 1, Total: total, Method: ep.Method, URL: ep.URL, Phase: "Unauth"}
+		}
+
+		unauthStatus := doRequest(client, ep.Method, ep.URL, nil)
+		results.Unauth = append(results.Unauth, [2]string{ep.URL, unauthStatus})
+
+		if updates != nil {
+			updates <- tui.ProgressUpdate{CurrentIndex: i + 1, Total: total, Method: ep.Method, URL: ep.URL, Phase: "Auth"}
+		}
+		authStatus := doRequest(client, ep.Method, ep.URL, headersAuth)
+		results.Auth = append(results.Auth, [2]string{ep.URL, authStatus})
+
+		for _, hset := range bypassHeaders {
+			key := ""
+			for k := range hset {
+				key = k
+			}
+			if updates != nil {
+				updates <- tui.ProgressUpdate{CurrentIndex: i + 1, Total: total, Method: ep.Method, URL: ep.URL, Phase: "Bypass " + key}
+			}
+			status := doRequest(client, ep.Method, ep.URL, hset)
+			results.Bypass = append(results.Bypass, [2]string{ep.URL + " (" + key + ")", status})
+
+			if status != unauthStatus {
+				hit := fmt.Sprintf("%s %s (%s) → baseline=%s, bypass=%s",
+					ep.Method, ep.URL, key, unauthStatus, status)
+				results.BypassHits = append(results.BypassHits, hit)
+			}
+		}
+
+		if containsIDORHint(ep.Path) {
+			results.IDORCandidates = append(results.IDORCandidates, ep.URL)
+		}
 	}
 
 	return results
