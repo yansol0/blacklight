@@ -97,8 +97,18 @@ func doRequest(client *http.Client, method, url string, headers map[string]strin
 }
 
 func containsIDORHint(path string) bool {
-	if strings.Contains(strings.ToLower(path), "{id}") || strings.Contains(strings.ToLower(path), "user") {
+	lower := strings.ToLower(path)
+
+	if strings.Contains(lower, "{") && strings.Contains(lower, "}") {
 		return true
 	}
+
+	idorKeywords := []string{"user", "account", "project", "org", "team", "profile"}
+	for _, kw := range idorKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+
 	return false
 }
