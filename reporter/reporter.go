@@ -18,6 +18,7 @@ func WriteReports(results tester.Results, outdir string) error {
 	authPath := filepath.Join(outdir, "auth_report.txt")
 	bypassPath := filepath.Join(outdir, "bypass_report.txt")
 	endpointsPath := filepath.Join(outdir, "endpoints_report.txt")
+	idorPath := filepath.Join(outdir, "idor_candidates.txt")
 
 	if err := writeList(unauthPath, results.Unauth); err != nil {
 		return err
@@ -37,6 +38,17 @@ func WriteReports(results tester.Results, outdir string) error {
 	for _, ep := range results.Endpoints {
 		line := fmt.Sprintf("%s %s\n", ep.Method, ep.URL)
 		if _, err := f.WriteString(line); err != nil {
+			return err
+		}
+	}
+
+	f2, err := os.Create(idorPath)
+	if err != nil {
+		return err
+	}
+	defer f2.Close()
+	for _, url := range results.IDORCandidates {
+		if _, err := f2.WriteString(url + "\n"); err != nil {
 			return err
 		}
 	}
