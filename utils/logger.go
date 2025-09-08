@@ -15,3 +15,7 @@ func LogWarn(msg string) {
 func LogSuccess(msg string) {
 	fmt.Printf("\033[32m%s\033[0m\n", msg) // green
 }
+
+func LogCritical(msg string) {
+	fmt.Printf("\033[1;32m%s\033[0m\n", msg) // bold bright green
+}

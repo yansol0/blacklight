@@ -15,6 +15,7 @@ type Results struct {
 	Auth           [][2]string
 	Bypass         [][2]string
 	IDORCandidates []string
+	BypassHits     []string
 }
 
 var bypassHeaders = []map[string]string{
@@ -24,6 +25,7 @@ var bypassHeaders = []map[string]string{
 	{"X-Remote-IP": "127.0.0.1"},
 	{"Forwarded": "for=127.0.0.1"},
 	{"Authorization": "Bearer faketoken"},
+	{"Cookie": "session=fakecookie"},
 }
 
 func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results {
@@ -32,6 +34,7 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 		Auth:           make([][2]string, 0),
 		Bypass:         make([][2]string, 0),
 		IDORCandidates: make([]string, 0),
+		BypassHits:     make([]string, 0),
 	}
 
 	utils.LogInfo("Starting probes against API...")
@@ -68,6 +71,12 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 			}
 			utils.LogInfo("  [Bypass " + key + "] → " + status)
 			results.Bypass = append(results.Bypass, [2]string{ep.URL + " (" + key + ")", status})
+
+			if status != unauthStatus {
+				hit := fmt.Sprintf("%s %s (%s) → baseline=%s, bypass=%s",
+					ep.Method, ep.URL, key, unauthStatus, status)
+				results.BypassHits = append(results.BypassHits, hit)
+			}
 		}
 
 		if containsIDORHint(ep.Path) {
@@ -77,6 +86,17 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 	}
 
 	utils.LogSuccess("Finished probing all endpoints")
+
+	if len(results.BypassHits) > 0 {
+		utils.LogCritical("====================================")
+		for _, hit := range results.BypassHits {
+			utils.LogCritical("AUTH BYPASS FOUND - " + hit)
+		}
+		utils.LogCritical("====================================")
+	} else {
+		utils.LogInfo("No auth bypasses detected")
+	}
+
 	return results
 }
 
