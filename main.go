@@ -43,11 +43,12 @@ func main() {
 	if !*noTUI {
 		utils.SetLoggingEnabled(false)
 		updates := make(chan tui.ProgressUpdate)
-		done := make(chan struct{})
+		done := make(chan tui.Summary)
 
 		go func() {
 			results = tester.RunTestsWithProgress(endpoints, *token, *cookie, updates)
 			close(updates)
+			done <- tui.Summary{BypassHits: len(results.BypassHits), IDORCandidates: len(results.IDORCandidates)}
 			close(done)
 		}()
 
@@ -55,8 +56,12 @@ func main() {
 			fmt.Println("TUI error:", err)
 			os.Exit(1)
 		}
+
+		utils.SetLoggingEnabled(true)
+		fmt.Printf("Summary: %d auth bypasses | %d IDOR candidates\n", len(results.BypassHits), len(results.IDORCandidates))
 	} else {
 		results = tester.RunTests(endpoints, *token, *cookie)
+		fmt.Printf("Summary: %d auth bypasses | %d IDOR candidates\n", len(results.BypassHits), len(results.IDORCandidates))
 	}
 
 	if err := reporter.WriteReports(results, *outdir); err != nil {

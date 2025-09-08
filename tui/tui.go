@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -15,10 +14,14 @@ type ProgressUpdate struct {
 	Total        int
 	Method       string
 	URL          string
-	Phase        string // Unauth, Auth, Bypass <Header>, Done
+	Phase        string // Unauth, Auth, Bypass <Header>
 }
 
-type doneMsg struct{}
+// Summary is sent when all work is finished
+type Summary struct {
+	BypassHits     int
+	IDORCandidates int
+}
 
 type Model struct {
 	spinner   spinner.Model
@@ -27,11 +30,12 @@ type Model struct {
 	detail    string
 	percent   float64
 	updatesCh <-chan ProgressUpdate
-	doneCh    <-chan struct{}
+	doneCh    <-chan Summary
 	quitting  bool
+	showHint  bool
 }
 
-func NewModel(updates <-chan ProgressUpdate, done <-chan struct{}) Model {
+func NewModel(updates <-chan ProgressUpdate, done <-chan Summary) Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	pr := progress.New(progress.WithScaledGradient("#3B82F6", "#10B981"))
@@ -43,6 +47,7 @@ func NewModel(updates <-chan ProgressUpdate, done <-chan struct{}) Model {
 		percent:   0,
 		updatesCh: updates,
 		doneCh:    done,
+		showHint:  true,
 	}
 }
 
@@ -60,10 +65,10 @@ func waitForUpdate(ch <-chan ProgressUpdate) tea.Cmd {
 	}
 }
 
-func waitForDone(ch <-chan struct{}) tea.Cmd {
+func waitForDone(ch <-chan Summary) tea.Cmd {
 	return func() tea.Msg {
-		<-ch
-		return doneMsg{}
+		s := <-ch
+		return s
 	}
 }
 
@@ -85,22 +90,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.percent = float64(msg.CurrentIndex) / float64(msg.Total)
 		}
 		return m, tea.Batch(waitForUpdate(m.updatesCh), m.spinner.Tick)
-	case doneMsg:
+	case Summary:
 		m.status = "Done"
-		m.detail = "All endpoints tested"
+		m.detail = fmt.Sprintf("Auth bypasses: %d | IDOR candidates: %d", msg.BypassHits, msg.IDORCandidates)
 		m.percent = 1.0
+		m.showHint = false
 		m.quitting = true
-		return m, tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg { return tea.Quit })
+		return m, tea.Quit
 	}
 	return m, nil
 }
 
 func (m Model) View() string {
 	bar := m.progress.ViewAs(m.percent)
-	return fmt.Sprintf("%s %s\n%s\n%s\n(press q to quit)", m.spinner.View(), m.status, bar, m.detail)
+	hint := ""
+	if m.showHint {
+		hint = "\n(press q to quit)"
+	}
+	return fmt.Sprintf("%s %s\n%s\n%s%s", m.spinner.View(), m.status, bar, m.detail, hint)
 }
 
-func Run(updates <-chan ProgressUpdate, done <-chan struct{}) error {
+func Run(updates <-chan ProgressUpdate, done <-chan Summary) error {
 	p := tea.NewProgram(NewModel(updates, done))
 	_, err := p.Run()
 	return err
