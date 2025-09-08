@@ -1,6 +1,7 @@
 package tester
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -33,20 +34,30 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 		IDORCandidates: make([]string, 0),
 	}
 
+	utils.LogInfo("Starting probes against API...")
+	utils.LogInfo("Total endpoints discovered: " + fmt.Sprint(len(endpoints)))
+
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	var headersAuth map[string]string
 	if token != "" {
 		headersAuth = map[string]string{"Authorization": "Bearer " + token}
+		utils.LogInfo("Using JWT-based authentication")
 	} else if cookie != "" {
 		headersAuth = map[string]string{"Cookie": cookie}
+		utils.LogInfo("Using Cookie-based authentication")
 	}
 
-	for _, ep := range endpoints {
+	for i, ep := range endpoints {
+		progress := fmt.Sprintf("[%d/%d]", i+1, len(endpoints))
+		utils.LogInfo(progress + " Testing endpoint: " + ep.Method + " " + ep.URL)
+
 		unauthStatus := doRequest(client, ep.Method, ep.URL, nil)
+		utils.LogInfo("  [Unauth] → " + unauthStatus)
 		results.Unauth = append(results.Unauth, [2]string{ep.URL, unauthStatus})
 
 		authStatus := doRequest(client, ep.Method, ep.URL, headersAuth)
+		utils.LogInfo("  [Auth]   → " + authStatus)
 		results.Auth = append(results.Auth, [2]string{ep.URL, authStatus})
 
 		for _, hset := range bypassHeaders {
@@ -55,6 +66,7 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 			for k := range hset {
 				key = k
 			}
+			utils.LogInfo("  [Bypass " + key + "] → " + status)
 			results.Bypass = append(results.Bypass, [2]string{ep.URL + " (" + key + ")", status})
 		}
 
@@ -64,8 +76,10 @@ func RunTests(endpoints []parser.Endpoint, token string, cookie string) Results 
 		}
 	}
 
+	utils.LogSuccess("Finished probing all endpoints")
 	return results
 }
+
 func doRequest(client *http.Client, method, url string, headers map[string]string) string {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
@@ -79,7 +93,7 @@ func doRequest(client *http.Client, method, url string, headers map[string]strin
 		return "ERR"
 	}
 	defer resp.Body.Close()
-	return http.StatusText(resp.StatusCode)
+	return fmt.Sprintf("%d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 }
 
 func containsIDORHint(path string) bool {
