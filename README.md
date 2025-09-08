@@ -1,4 +1,4 @@
-# API Probe
+# Blacklight
 
 A lightweight API probing tool built in Go.  
 It parses an OpenAPI specification, enumerates endpoints, and runs three types of probes:  
